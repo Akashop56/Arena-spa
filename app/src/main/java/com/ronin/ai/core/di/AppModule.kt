@@ -36,7 +36,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RoninDatabase =
         Room.databaseBuilder(context, RoninDatabase::class.java, "ronin.db")
-            .fallbackToDestructiveMigration(false)
+            .fallbackToDestructiveMigration()
             .build()
 
     @Provides

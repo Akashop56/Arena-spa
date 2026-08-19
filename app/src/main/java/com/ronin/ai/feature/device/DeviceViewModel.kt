@@ -21,7 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DeviceViewModel @Inject constructor(
     private val deviceUseCases: DeviceUseCases,
-    notificationRepository: NotificationRepository
+    private val notificationRepository: NotificationRepository
 ) : ViewModel() {
 
     private val _battery = MutableStateFlow<BatteryState?>(null)
