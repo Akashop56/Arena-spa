@@ -1,16 +1,17 @@
 package com.ronin.ai.feature.skills
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.ronin.ai.core.ai.tools.ToolRegistry
 import com.ronin.ai.core.domain.model.ExperienceItem
 import com.ronin.ai.core.domain.model.ToolDefinition
 import com.ronin.ai.core.domain.repository.ExperienceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 @HiltViewModel
