@@ -169,21 +169,21 @@ class AndroidDeviceManager @Inject constructor(
     }.getOrDefault(false)
 
     // ------------------------------------------------------------------- torch
+    private var torchState = false
+
     private fun torchCameraId(): String? = runCatching {
-        cameraManager.cameraIdList.firstOrNull { id ->
+        cameraManager.cameraIdList.firstOrNull { id: String ->
             cameraManager.getCameraCharacteristics(id)
                 .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
         }
     }.getOrNull()
 
-    override fun isTorchOn(): Boolean = runCatching {
-        val id = torchCameraId() ?: return false
-        cameraManager.getTorchMode(id)
-    }.getOrDefault(false)
+    override fun isTorchOn(): Boolean = torchState
 
     override fun toggleTorch(on: Boolean): Boolean = runCatching {
         val id = torchCameraId() ?: return false
         cameraManager.setTorchMode(id, on)
+        torchState = on
         true
     }.getOrDefault(false)
 

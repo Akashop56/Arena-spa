@@ -232,6 +232,6 @@ fun SettingsRow(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = RoninTextSecondary)
             }
         }
-        trailing?.invoke()
+        trailing?.let { this.it() }
     }
 }

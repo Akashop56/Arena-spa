@@ -55,7 +55,7 @@ class OpenAiCompatibleProvider(
     override suspend fun testConnection(config: AiProviderConfig): ProviderTestResult =
         withContext(Dispatchers.IO) {
             val started = System.currentTimeMillis()
-            val latency: Long
+            var latency = 0L
             try {
                 val base = config.effectiveBaseUrl
                 if (base.isBlank()) {

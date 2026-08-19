@@ -96,7 +96,7 @@ class AiEngine @Inject constructor(
             val config = settingsRepository.getProviderConfig(defaultType)
             val providerReady = config.enabled && config.hasKey
 
-            val reply: String
+            var reply: String
             var providerUsed: String? = null
             if (!providerReady) {
                 reply = when {
