@@ -102,7 +102,7 @@ fun SectionHeader(
             style = MaterialTheme.typography.labelLarge,
             color = RoninTextSecondary
         )
-        trailing?.invoke()
+        trailing?.let { it() }
     }
 }
 

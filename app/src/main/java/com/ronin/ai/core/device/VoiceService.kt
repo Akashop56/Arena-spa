@@ -105,16 +105,16 @@ class VoiceService @Inject constructor(
             )
             mp.setDataSource(file.absolutePath)
             mp.prepare()
-            mp.setOnCompletionListener {
-                runCatching { it.release() }
+            mp.setOnCompletionListener { playerParam ->
+                runCatching { playerParam.release() }
                 runCatching { file.delete() }
-                if (player === it) player = null
+                if (player === playerParam) player = null
                 onDone?.invoke()
             }
-            mp.setOnErrorListener { _, _, _ ->
-                runCatching { it.release() }
+            mp.setOnErrorListener { playerParam, _, _ ->
+                runCatching { playerParam.release() }
                 runCatching { file.delete() }
-                if (player === it) player = null
+                if (player === playerParam) player = null
                 onDone?.invoke()
                 true
             }
