@@ -8,6 +8,23 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    logging.addStandardOutputListener { line ->
+        val str = line.toString()
+        if (str.contains("e: ") || str.contains("error:") || str.contains(".kt:")) {
+            val cleaned = str.trim().replace("\n", " ")
+            println("::error file=app/build.gradle.kts,line=1::$cleaned")
+        }
+    }
+    logging.addStandardErrorListener { line ->
+        val str = line.toString()
+        if (str.contains("e: ") || str.contains("error:") || str.contains(".kt:")) {
+            val cleaned = str.trim().replace("\n", " ")
+            println("::error file=app/build.gradle.kts,line=1::$cleaned")
+        }
+    }
+}
+
 android {
     namespace = "com.ronin.ai"
     compileSdk = 35
