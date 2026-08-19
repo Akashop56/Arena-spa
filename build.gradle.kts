@@ -40,9 +40,13 @@ for (sdkDir in sdkDirs) {
 gradle.buildFinished {
     val failure = this.failure
     if (failure != null) {
-        val rootCause = (failure.cause?.message ?: failure.message ?: "Unknown build failure")
-            .replace("\n", " ").replace("\r", " ")
-        val stack = failure.stackTraceToString().replace("\n", " ").replace("\r", " ").take(1000)
-        println("::error file=build.gradle.kts,line=1::BUILD_FAILURE: $rootCause --- STACK: $stack")
+        val sb = StringBuilder()
+        var curr: Throwable? = failure
+        while (curr != null) {
+            sb.append(curr.message ?: curr.javaClass.name).append(" --- ")
+            curr = curr.cause
+        }
+        val fullMsg = sb.toString().replace("\n", " ").replace("\r", " ").take(1000)
+        println("::error file=build.gradle.kts,line=1::KOTLIN_COMPILE_ERROR: $fullMsg")
     }
 }
