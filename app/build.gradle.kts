@@ -8,19 +8,23 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+val compileErrorBuffer = StringBuilder()
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-    logging.addStandardOutputListener { line ->
-        val str = line.toString()
-        if (str.contains("e: ") || str.contains("error:") || str.contains(".kt:")) {
-            val cleaned = str.trim().replace("\n", " ")
-            println("::error file=app/build.gradle.kts,line=1::$cleaned")
-        }
+    logging.addStandardErrorListener { chunk ->
+        compileErrorBuffer.append(chunk)
     }
-    logging.addStandardErrorListener { line ->
-        val str = line.toString()
-        if (str.contains("e: ") || str.contains("error:") || str.contains(".kt:")) {
-            val cleaned = str.trim().replace("\n", " ")
-            println("::error file=app/build.gradle.kts,line=1::$cleaned")
+}
+
+gradle.buildFinished {
+    val errText = compileErrorBuffer.toString()
+    if (errText.contains("e: ") || errText.contains("error:")) {
+        val errorLines = errText.lines().filter { it.contains("e: ") || it.contains("error:") }.take(10)
+        for (err in errorLines) {
+            val cleaned = err.trim().replace("\n", " ").replace("\r", " ")
+            if (cleaned.isNotBlank()) {
+                println("::error file=app/build.gradle.kts,line=1::$cleaned")
+            }
         }
     }
 }
