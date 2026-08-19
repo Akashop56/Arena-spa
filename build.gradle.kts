@@ -40,9 +40,9 @@ for (sdkDir in sdkDirs) {
 gradle.buildFinished {
     val failure = this.failure
     if (failure != null) {
-        val rootCause = failure.cause?.message ?: failure.message ?: "Unknown build failure"
-        val stack = failure.stackTraceToString().take(1500)
-        println("BUILD FAILURE REASON: $rootCause")
-        println("BUILD FAILURE STACKTRACE:\n$stack")
+        val rootCause = (failure.cause?.message ?: failure.message ?: "Unknown build failure")
+            .replace("\n", " ").replace("\r", " ")
+        val stack = failure.stackTraceToString().replace("\n", " ").replace("\r", " ").take(1000)
+        println("::error file=build.gradle.kts,line=1::BUILD_FAILURE: $rootCause --- STACK: $stack")
     }
 }
