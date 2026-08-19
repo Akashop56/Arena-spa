@@ -1,6 +1,6 @@
 package com.ronin.ai.core.device
 
-import android.service.notification.NotificationListenerService
+import android.service.notification.NotificationListenerService as SystemNotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.ronin.ai.core.domain.model.NotificationEventItem
 import com.ronin.ai.core.domain.repository.NotificationRepository
@@ -13,7 +13,7 @@ import javax.inject.Inject
  * settings (offered in Device Control → Notifications).
  */
 @AndroidEntryPoint
-class NotificationListenerService : NotificationListenerService() {
+class NotificationListenerService : SystemNotificationListenerService() {
 
     @Inject
     lateinit var notificationRepository: NotificationRepository
