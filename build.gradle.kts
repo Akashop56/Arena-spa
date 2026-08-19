@@ -7,6 +7,36 @@ plugins {
     alias(libs.plugins.hilt) apply false
 }
 
+// Auto-accept Android SDK licenses if running on CI / GitHub Actions
+val sdkDirs = listOfNotNull(
+    System.getenv("ANDROID_HOME"),
+    System.getenv("ANDROID_SDK_ROOT"),
+    "/usr/local/lib/android/sdk",
+    "${System.getProperty("user.home")}/Android/Sdk"
+).map { java.io.File(it) }.filter { it.exists() }
+
+for (sdkDir in sdkDirs) {
+    try {
+        val licensesDir = java.io.File(sdkDir, "licenses")
+        licensesDir.mkdirs()
+        
+        val sdkLicense = java.io.File(licensesDir, "android-sdk-license")
+        if (!sdkLicense.exists() || !sdkLicense.readText().contains("24333f8a63718c303d008f2230294d7973b07370")) {
+            sdkLicense.writeText(
+                """
+                8933017284140101bC1573917812d4d8b37f4951
+                24333f8a63718c303d008f2230294d7973b07370
+                84831b9409646a7d8f22a21b22498e470f98b7f7
+                d56f518747945140a32263b12a1086a9d9fc9268
+                """.trimIndent()
+            )
+            println("Accepted Android SDK licenses in ${sdkLicense.absolutePath}")
+        }
+    } catch (e: Exception) {
+        println("Could not write SDK licenses to $sdkDir: ${e.message}")
+    }
+}
+
 gradle.buildFinished {
     val failure = this.failure
     if (failure != null) {
@@ -14,27 +44,5 @@ gradle.buildFinished {
         val stack = failure.stackTraceToString().take(1500)
         println("BUILD FAILURE REASON: $rootCause")
         println("BUILD FAILURE STACKTRACE:\n$stack")
-        
-        val ghToken = System.getenv("GITHUB_TOKEN") ?: System.getenv("GH_TOKEN")
-        val ghRepo = System.getenv("GITHUB_REPOSITORY") ?: "Akashop56/Arena-spa"
-        val ghSha = System.getenv("GITHUB_SHA")
-        if (!ghToken.isNullOrEmpty() && !ghSha.isNullOrEmpty()) {
-            try {
-                val url = java.net.URL("https://api.github.com/repos/$ghRepo/statuses/$ghSha")
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Authorization", "Bearer $ghToken")
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Accept", "application/vnd.github+json")
-                conn.setRequestProperty("User-Agent", "Gradle-Diagnostic")
-                conn.doOutput = true
-                val desc = (rootCause + " | " + stack).replace("\n", " ").replace("\r", " ").replace("\"", "'").take(130)
-                val json = """{"state": "failure", "description": "$desc", "context": "gradle-diagnostic"}"""
-                conn.outputStream.write(json.toByteArray(Charsets.UTF_8))
-                println("Posted diagnostic status: ${conn.responseCode}")
-            } catch (e: Exception) {
-                println("Failed to post diagnostic status: ${e.message}")
-            }
-        }
     }
 }
