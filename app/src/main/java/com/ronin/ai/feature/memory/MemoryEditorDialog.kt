@@ -40,7 +40,7 @@ fun MemoryEditorDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(MemoryType.entries.toList()) { t ->
-                        OptionChip(t.label, t == type) { type = t }
+                        OptionChip(t.label, t == type, onClick = { type = t })
                     }
                 }
                 RoninTextField(
