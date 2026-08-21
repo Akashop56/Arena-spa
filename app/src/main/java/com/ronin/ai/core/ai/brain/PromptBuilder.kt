@@ -26,17 +26,36 @@ class PromptBuilder @Inject constructor() {
         if (preferences.isNotEmpty()) {
             appendLine()
             appendLine("USER PREFERENCES (respect these):")
-            preferences.forEach { appendLine("- ${it.content}") }
+            preferences.forEach { appendLine("- ${it.content.clamp()}") }
         }
         if (relevantMemories.isNotEmpty()) {
             appendLine()
             appendLine("RELEVANT MEMORIES (use if helpful):")
-            relevantMemories.forEach { appendLine("- ${it.content}") }
+            // De-duplicated against preferences: the same fact appearing twice
+            // wastes budget and makes the model over-weight it.
+            val seen = preferences.map { it.content.trim().lowercase() }.toMutableSet()
+            relevantMemories.forEach { memory ->
+                val key = memory.content.trim().lowercase()
+                if (seen.add(key)) appendLine("- ${memory.content.clamp()}")
+            }
         }
         if (learnedSolutions.isNotEmpty()) {
             appendLine()
             appendLine("LESSONS LEARNED (apply when relevant):")
-            learnedSolutions.forEach { appendLine("- ${it.title}: ${it.detail}") }
+            learnedSolutions.forEach { appendLine("- ${it.title}: ${it.detail.clamp()}") }
         }
+    }
+
+    /**
+     * A single memory must not dominate the prompt. Stored notes can be long
+     * (a pasted paragraph), and the system prompt has a fixed budget.
+     */
+    private fun String.clamp(max: Int = MAX_MEMORY_CHARS): String {
+        val text = trim().replace('\n', ' ')
+        return if (text.length <= max) text else text.take(max).trimEnd() + "…"
+    }
+
+    private companion object {
+        const val MAX_MEMORY_CHARS = 220
     }
 }

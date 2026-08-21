@@ -27,7 +27,8 @@ class ContextAssembler @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val memoryRepository: MemoryRepository,
     private val experienceRepository: ExperienceRepository,
-    private val promptBuilder: PromptBuilder
+    private val promptBuilder: PromptBuilder,
+    private val budget: ContextBudget
 ) {
 
     suspend fun assemble(userInput: String): AssistantContext {
@@ -63,9 +64,25 @@ class ContextAssembler @Inject constructor(
         val messages = recent.map { message ->
             ProviderMessage(
                 role = if (message.role == ChatRole.USER) "user" else "assistant",
-                content = message.content
+                content = budget.clampMessage(
+                    message.content,
+                    ContextBudget.MAX_SINGLE_MESSAGE_TOKENS
+                )
             )
         }
-        return AssistantContext(systemPrompt = systemPrompt, recentMessages = messages)
+
+        // Give history whatever the system prompt did not use, so a long
+        // request can never exceed the model's context window.
+        val systemCost = budget.estimateTokens(systemPrompt)
+        val historyBudget = (ContextBudget.TOTAL_INPUT_TOKENS - systemCost)
+            .coerceAtLeast(MIN_HISTORY_TOKENS)
+        val fitted = budget.fitHistory(messages, historyBudget)
+
+        return AssistantContext(systemPrompt = systemPrompt, recentMessages = fitted)
+    }
+
+    private companion object {
+        /** Always keep room for at least a couple of turns of context. */
+        const val MIN_HISTORY_TOKENS = 600
     }
 }
