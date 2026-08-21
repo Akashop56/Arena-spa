@@ -1,5 +1,6 @@
 package com.ronin.ai.core.data.repository
 
+import com.ronin.ai.core.ai.brain.MemoryRanker
 import com.ronin.ai.core.data.db.dao.MemoryDao
 import com.ronin.ai.core.data.db.entity.MemoryEntity
 import com.ronin.ai.core.data.db.entity.toDomain
@@ -7,7 +8,6 @@ import com.ronin.ai.core.data.db.entity.toEntity
 import com.ronin.ai.core.domain.model.MemoryItem
 import com.ronin.ai.core.domain.model.MemoryType
 import com.ronin.ai.core.domain.repository.MemoryRepository
-import com.ronin.ai.core.common.keywords
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -15,7 +15,8 @@ import javax.inject.Singleton
 
 @Singleton
 class MemoryRepositoryImpl @Inject constructor(
-    private val dao: MemoryDao
+    private val dao: MemoryDao,
+    private val ranker: MemoryRanker
 ) : MemoryRepository {
 
     override fun all(): Flow<List<MemoryItem>> =
@@ -52,16 +53,33 @@ class MemoryRepositoryImpl @Inject constructor(
     override suspend fun findSimilar(type: MemoryType, title: String, content: String): Boolean =
         dao.countMatching(type.name, title, content) > 0
 
+    /**
+     * Recall used by the reasoning pipeline.
+     *
+     * Previously this took the first three tokens of the raw input and OR-ed
+     * them into LIKE queries; because questions start with filler words
+     * ("what do you know about my coffee preference"), the real subject was
+     * usually discarded and nothing was recalled. Now the query is reduced to
+     * content-bearing terms, each is used to gather candidates, and
+     * [MemoryRanker] scores them on lexical overlap x importance x recency.
+     */
     override suspend fun recallRelevant(input: String, limit: Int): List<MemoryItem> {
-        val terms = input.keywords().take(3)
-        val results = LinkedHashMap<Long, MemoryItem>()
+        val terms = ranker.terms(input)
+        if (terms.isEmpty()) return emptyList()
+
+        val candidates = LinkedHashMap<Long, MemoryItem>()
         for (term in terms) {
-            val matches = dao.searchNonConversation(term, 6).map { it.toDomain() }
-            for (m in matches) results[m.id] = m
-            if (results.size >= limit) break
+            for (entity in dao.searchNonConversation(term, CANDIDATES_PER_TERM)) {
+                val item = entity.toDomain()
+                candidates[item.id] = item
+            }
+            if (candidates.size >= MAX_CANDIDATES) break
         }
-        return results.values
-            .sortedWith(compareByDescending<MemoryItem> { it.importance }.thenByDescending { it.updatedAt })
-            .take(limit)
+        return ranker.rank(input, candidates.values.toList(), limit)
+    }
+
+    private companion object {
+        const val CANDIDATES_PER_TERM = 8
+        const val MAX_CANDIDATES = 40
     }
 }
