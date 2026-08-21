@@ -208,6 +208,8 @@ class AiEngine @Inject constructor(
      * the turn cheap as the memory store grows.
      */
     private suspend fun persistPreferences(userInput: String) {
+        // Respect the memory master switch: when off, RONIN captures nothing.
+        if (!settingsRepository.memoryEnabled.first()) return
         val extracted = preferenceExtractor.extract(userInput)
         if (extracted.isEmpty()) return
         for (pref in extracted) {

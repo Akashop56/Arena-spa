@@ -1,6 +1,5 @@
 package com.ronin.ai.core.design.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,20 +25,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ronin.ai.R
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninBlack
 import com.ronin.ai.core.design.theme.RoninBorder
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSurfaceHigh
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninAmber
 
 /**
  * Click handler without the Material ripple. Used for small inline affordances
@@ -53,24 +51,49 @@ fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed {
     )
 }
 
-/** App-wide background: dark base + subtle nebula artwork + neon glow. */
+/**
+ * App-wide HUD background.
+ *
+ * This used to decode a 1376x768 PNG (~4 MB of ARGB_8888 in RAM) on every
+ * screen. It is now drawn entirely by the GPU with two radial gradients, which
+ * costs no bitmap memory and no decode time — a meaningful win on the low-end
+ * devices RONIN targets — while keeping the same deep-space look.
+ */
 @Composable
 fun RoninBackground(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    Box(modifier = modifier.fillMaxSize().background(RoninBlack)) {
-        Image(
-            painter = painterResource(R.drawable.bg_nebula),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, RoninBlack)))
-        )
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(RoninBlack)
+            .drawBehind {
+                // Cyan glow from the top-left, amber counter-glow bottom-right.
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(RoninCyan.copy(alpha = 0.13f), Color.Transparent),
+                        center = Offset(size.width * 0.15f, size.height * 0.08f),
+                        radius = size.maxDimension * 0.75f
+                    )
+                )
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(RoninAmber.copy(alpha = 0.07f), Color.Transparent),
+                        center = Offset(size.width * 0.9f, size.height * 0.85f),
+                        radius = size.maxDimension * 0.6f
+                    )
+                )
+                // Vignette so content stays legible near the bottom bar.
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, RoninBlack.copy(alpha = 0.85f)),
+                        startY = size.height * 0.55f,
+                        endY = size.height
+                    )
+                )
+            }
+    ) {
         content()
     }
 }

@@ -29,6 +29,10 @@ interface SettingsRepository {
     val speechOutputEnabled: Flow<Boolean>
     suspend fun setSpeechOutputEnabled(enabled: Boolean)
 
+    /** When false, RONIN stops recalling and auto-capturing memories. */
+    val memoryEnabled: Flow<Boolean>
+    suspend fun setMemoryEnabled(enabled: Boolean)
+
     val onboarded: Flow<Boolean>
     suspend fun setOnboarded(value: Boolean)
 }
