@@ -11,3 +11,12 @@ access). They complement, and do not replace, `./gradlew assembleDebug`.
 python3 tools/xref.py
 python3 tools/vmcheck.py
 ```
+
+- `sqlcheck.py`  — rebuilds the schema from `@Entity` classes and executes every
+  `@Query` against a real SQLite engine (approximates Room's compile-time check).
+- `hiltcheck.py` — resolves every `@Inject` constructor parameter against
+  `@Provides` / `@Binds` / other `@Inject` types (approximates Hilt's check).
+
+`verify/` holds the executable subsystem checks described in
+`docs/VALIDATION.md` (secure vault, provider parsing/SSE, memory SQL, settings
+serialisation). They run against real Gson / JCE / SQLite, not mocks.
