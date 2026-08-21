@@ -124,9 +124,15 @@ private fun parseMarkdown(source: String): List<MdBlock> {
     return blocks
 }
 
-/** Applies inline **bold**, *italic*, `code`, ~~strike~~ and [links](url). */
+/**
+ * Applies inline **bold**, *italic*, `code`, ~~strike~~ and [links](url).
+ *
+ * The base colour is pushed *first* so that spans which set their own colour
+ * (code, links) still win — applying it afterwards would flatten them.
+ */
 private fun inlineMarkdown(text: String, baseColor: Color): AnnotatedString =
     buildAnnotatedString {
+        pushStyle(SpanStyle(color = baseColor))
         // Ordered so that ** is matched before *.
         val pattern = Regex(
             """(\*\*|__)(.+?)\1|(\*|_)(.+?)\3|`([^`]+)`|~~(.+?)~~|\[([^]]+)]\(([^)]+)\)"""
@@ -158,7 +164,7 @@ private fun inlineMarkdown(text: String, baseColor: Color): AnnotatedString =
             cursor = match.range.last + 1
         }
         if (cursor < text.length) append(text.substring(cursor))
-        addStyle(SpanStyle(color = baseColor), 0, length)
+        pop()
     }
 
 /**
