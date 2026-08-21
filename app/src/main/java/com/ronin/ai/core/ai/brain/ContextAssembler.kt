@@ -40,11 +40,18 @@ class ContextAssembler @Inject constructor(
             recent.removeAt(recent.size - 1)
         }
 
-        val preferences = memoryRepository.byType(MemoryType.PREFERENCE).first().take(8)
-        val relevant = memoryRepository.recallRelevant(userInput, 6)
-        val learned = experienceRepository.all().first()
-            .filter { it.resolved }
-            .take(5)
+        // When memory is disabled RONIN still chats, but without recalling
+        // anything it has stored about the user.
+        val memoryEnabled = settingsRepository.memoryEnabled.first()
+        val preferences = if (memoryEnabled) {
+            memoryRepository.byType(MemoryType.PREFERENCE).first().take(8)
+        } else emptyList()
+        val relevant = if (memoryEnabled) {
+            memoryRepository.recallRelevant(userInput, 6)
+        } else emptyList()
+        val learned = if (memoryEnabled) {
+            experienceRepository.all().first().filter { it.resolved }.take(5)
+        } else emptyList()
 
         val systemPrompt = promptBuilder.buildSystemPrompt(
             assistantName = assistantName,

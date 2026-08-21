@@ -19,4 +19,7 @@ interface MemoryRepository {
 
     /** Recall memories relevant to a user input (used by the context assembler). */
     suspend fun recallRelevant(input: String, limit: Int): List<MemoryItem>
+
+    /** True when an identical memory already exists (auto-save de-duplication). */
+    suspend fun findSimilar(type: MemoryType, title: String, content: String): Boolean
 }

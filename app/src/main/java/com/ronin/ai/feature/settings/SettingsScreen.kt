@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ronin.ai.core.common.Constants
 import com.ronin.ai.core.design.components.NeonCard
@@ -41,7 +45,7 @@ import com.ronin.ai.core.design.components.SwitchRow
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 
 @Composable
 fun SettingsScreen(
@@ -54,6 +58,21 @@ fun SettingsScreen(
     val speechOutput by viewModel.speechOutput.collectAsStateWithLifecycle()
     val defaultProvider by viewModel.defaultProvider.collectAsStateWithLifecycle()
     val voiceProvider by viewModel.voiceProvider.collectAsStateWithLifecycle()
+    val memoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
+
+    // Reading this on every recomposition hit the PackageManager repeatedly;
+    // refresh it once per resume instead.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var notificationAccess by remember { mutableStateOf(viewModel.isNotificationAccessGranted()) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationAccess = viewModel.isNotificationAccessGranted()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var showNameDialog by remember { mutableStateOf(false) }
     var showClearMemoryConfirm by remember { mutableStateOf(false) }
@@ -113,20 +132,35 @@ fun SettingsScreen(
                 )
             }
 
+            item { SectionHeader(title = "Memory", modifier = Modifier.padding(top = 8.dp)) }
+            item {
+                NeonCard(modifier = Modifier.fillMaxWidth(), glow = false) {
+                    SwitchRow(
+                        title = "Memory engine",
+                        subtitle = if (memoryEnabled) {
+                            "RONIN remembers preferences and recalls them in chat"
+                        } else {
+                            "Paused — nothing is stored or recalled"
+                        },
+                        checked = memoryEnabled,
+                        onCheckedChange = viewModel::setMemoryEnabled
+                    )
+                }
+            }
+
             item { SectionHeader(title = "Security & data", modifier = Modifier.padding(top = 8.dp)) }
             item {
                 SettingsRow(
                     icon = Icons.Rounded.Security,
                     title = "API key storage",
-                    subtitle = "Encrypted with Android Keystore (AES-256-GCM)",
-                    onClick = { }
+                    subtitle = "Encrypted with Android Keystore (AES-256-GCM)"
                 )
             }
             item {
                 SettingsRow(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "Notification access",
-                    subtitle = if (viewModel.isNotificationAccessGranted()) "Granted" else "Not granted",
+                    subtitle = if (notificationAccess) "Granted" else "Not granted",
                     onClick = viewModel::openNotificationAccessSettings
                 )
             }

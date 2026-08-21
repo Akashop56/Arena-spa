@@ -6,7 +6,12 @@ import com.ronin.ai.core.domain.model.AiRequestException
 import com.ronin.ai.core.domain.model.ProviderMessage
 import com.ronin.ai.core.domain.model.ProviderResponse
 import com.ronin.ai.core.domain.model.ProviderTestResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import retrofit2.HttpException
+import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
@@ -20,7 +25,57 @@ interface AiProvider {
         temperature: Float
     ): ProviderResponse
 
+    /**
+     * Streams the reply token-by-token. Providers that cannot stream fall back
+     * to emitting the full [complete] result as a single chunk, so callers can
+     * always use this API safely.
+     */
+    fun stream(
+        config: AiProviderConfig,
+        messages: List<ProviderMessage>,
+        temperature: Float
+    ): Flow<String> = flow {
+        emit(complete(config, messages, temperature).text)
+    }
+
     suspend fun testConnection(config: AiProviderConfig): ProviderTestResult
+}
+
+/**
+ * Retries [block] on transient failures (timeouts, network drops, 429 and 5xx)
+ * using exponential backoff. Authentication and request errors are never
+ * retried — they cannot succeed on a second attempt.
+ */
+internal suspend fun <T> withRetry(
+    attempts: Int = 3,
+    initialDelayMs: Long = 600L,
+    block: suspend () -> T
+): T {
+    var delayMs = initialDelayMs
+    var last: Throwable? = null
+    repeat(attempts) { attempt ->
+        try {
+            return block()
+        } catch (c: CancellationException) {
+            throw c
+        } catch (t: Throwable) {
+            last = t
+            if (!t.isRetryable() || attempt == attempts - 1) throw t
+            delay(delayMs)
+            delayMs *= 2
+        }
+    }
+    throw last ?: IllegalStateException("Retry failed")
+}
+
+/** Only transport hiccups and provider-side overload are worth retrying. */
+internal fun Throwable.isRetryable(): Boolean = when (this) {
+    is SocketTimeoutException -> true
+    is UnknownHostException -> false
+    is HttpException -> code() == 429 || code() in 500..599
+    is AiRequestException -> httpCode == 429 || (httpCode != null && httpCode in 500..599)
+    is IOException -> true
+    else -> false
 }
 
 /** Maps transport + HTTP errors to human-readable messages. */

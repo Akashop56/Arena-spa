@@ -39,7 +39,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSurface
 import com.ronin.ai.core.design.theme.RoninSurfaceHigh
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 
 /** Gradient action button (cyan → violet). */
 @Composable
@@ -57,7 +57,7 @@ fun GradientButton(
                 Brush.horizontalGradient(
                     listOf(
                         RoninCyan.copy(alpha = if (enabled) 1f else 0.35f),
-                        RoninViolet.copy(alpha = if (enabled) 1f else 0.35f)
+                        RoninAmber.copy(alpha = if (enabled) 1f else 0.35f)
                     )
                 ),
                 shape
@@ -202,7 +202,8 @@ fun SettingsRow(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit,
+    /** Null renders an informational (non-tappable) row. */
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable RowScope.() -> Unit)? = null
 ) {
@@ -212,7 +213,7 @@ fun SettingsRow(
             .clip(RoundedCornerShape(16.dp))
             .background(RoninSurfaceHigh.copy(alpha = 0.7f))
             .border(1.dp, RoninBorder, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

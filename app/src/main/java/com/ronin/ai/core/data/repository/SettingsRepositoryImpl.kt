@@ -54,6 +54,12 @@ class SettingsRepositoryImpl @Inject constructor(
         dataStore.setSpeechOutputEnabled(enabled)
     }
 
+    override val memoryEnabled: Flow<Boolean> = dataStore.memoryEnabled()
+
+    override suspend fun setMemoryEnabled(enabled: Boolean) {
+        dataStore.setMemoryEnabled(enabled)
+    }
+
     override val onboarded: Flow<Boolean> = dataStore.onboarded()
 
     override suspend fun setOnboarded(value: Boolean) {

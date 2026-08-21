@@ -48,6 +48,12 @@ interface MemoryDao {
     @Query("SELECT * FROM memories WHERE id = :id")
     suspend fun getById(id: Long): MemoryEntity?
 
+    /** Exact duplicate probe used before auto-saving an extracted preference. */
+    @Query(
+        "SELECT COUNT(*) FROM memories WHERE type = :type AND title = :title AND content = :content"
+    )
+    suspend fun countMatching(type: String, title: String, content: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: MemoryEntity): Long
 

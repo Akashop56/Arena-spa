@@ -48,6 +48,7 @@ class SettingsDataStore @Inject constructor(
         val ASSISTANT_NAME = stringPreferencesKey("assistant_name")
         val SPEECH_OUTPUT = booleanPreferencesKey("speech_output")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
     }
 
     private fun configKey(type: AiProviderType) = when (type) {
@@ -141,6 +142,14 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setSpeechOutputEnabled(enabled: Boolean) {
         context.roninDataStore.edit { it[Keys.SPEECH_OUTPUT] = enabled }
+    }
+
+    /** Master switch for the memory engine (recall + auto-capture). */
+    fun memoryEnabled(): Flow<Boolean> =
+        context.roninDataStore.data.map { it[Keys.MEMORY_ENABLED] ?: true }
+
+    suspend fun setMemoryEnabled(enabled: Boolean) {
+        context.roninDataStore.edit { it[Keys.MEMORY_ENABLED] = enabled }
     }
 
     fun onboarded(): Flow<Boolean> =

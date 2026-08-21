@@ -114,7 +114,14 @@ class SystemVoiceEngine @Inject constructor(
         onDone: (() -> Unit)?
     ) {
         val engine = tts ?: return
-        engine.language = Locale.forLanguageTag(language)
+        // setLanguage returns a status: if the requested language has no voice
+        // data we fall back to the device default rather than failing silently.
+        val requested = Locale.forLanguageTag(language)
+        val status = runCatching { engine.setLanguage(requested) }
+            .getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+        if (status == TextToSpeech.LANG_MISSING_DATA || status == TextToSpeech.LANG_NOT_SUPPORTED) {
+            runCatching { engine.setLanguage(Locale.getDefault()) }
+        }
         engine.setSpeechRate(speed.coerceIn(0.5f, 2f))
         engine.setPitch(pitch.coerceIn(0.5f, 2f))
         doneCallback = onDone
@@ -126,18 +133,51 @@ class SystemVoiceEngine @Inject constructor(
         }
     }
 
+    /** Releases the current recognizer session. Safe to call repeatedly. */
+    private fun destroyRecognizer() {
+        recognizerActive = false
+        val sr = recognizer
+        recognizer = null
+        runCatching { sr?.cancel() }
+        runCatching { sr?.destroy() }
+    }
+
+    /** Stops speech playback only — recognition is left untouched. */
+    fun stopSpeaking() {
+        mainHandler.post {
+            runCatching { tts?.stop() }
+            doneCallback = null
+            pendingText = null
+            pendingDone = null
+        }
+    }
+
+    /** Stops an active listening session only. */
+    fun stopListening() {
+        mainHandler.post {
+            runCatching { recognizer?.stopListening() }
+            destroyRecognizer()
+        }
+    }
+
+    fun isListening(): Boolean = recognizerActive
+
+    /** Stops both playback and recognition. */
     fun stop() {
         mainHandler.post {
-            tts?.stop()
+            runCatching { tts?.stop() }
             doneCallback = null
-            recognizer?.cancel()
-            recognizerActive = false
+            pendingText = null
+            pendingDone = null
+            destroyRecognizer()
         }
     }
 
     fun shutdown() {
         mainHandler.post {
-            tts?.shutdown()
+            destroyRecognizer()
+            runCatching { tts?.stop() }
+            runCatching { tts?.shutdown() }
             tts = null
             ttsReady = false
         }
@@ -157,37 +197,51 @@ class SystemVoiceEngine @Inject constructor(
         language: String,
         onPartial: (VoiceRecognitionResult) -> Unit,
         onResult: (VoiceRecognitionResult) -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onRms: ((Float) -> Unit)? = null,
+        onReady: (() -> Unit)? = null,
+        onEndOfSpeech: (() -> Unit)? = null
     ): Boolean {
         if (!isRecognitionAvailable()) {
             onError("Speech recognition is not available on this device")
             return false
         }
         mainHandler.post {
+            // Never speak over ourselves: stop any playback before listening.
+            runCatching { tts?.stop() }
             if (recognizerActive) {
-                onError("Already listening")
-                return@post
+                // Recover instead of refusing: tear the old session down and
+                // start a fresh one. A stale recognizer was the main cause of
+                // the mic becoming permanently unresponsive.
+                destroyRecognizer()
             }
             val sr = SpeechRecognizer.createSpeechRecognizer(context)
             recognizer = sr
             recognizerActive = true
 
             sr.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) = Unit
+                override fun onReadyForSpeech(params: Bundle?) {
+                    mainHandler.post { onReady?.invoke() }
+                }
                 override fun onBeginningOfSpeech() = Unit
-                override fun onRmsChanged(rmsdB: Float) = Unit
+                override fun onRmsChanged(rmsdB: Float) {
+                    // Normalise the (roughly) -2..10 dB range into 0..1 so the
+                    // UI can drive a live microphone level indicator.
+                    val level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                    onRms?.invoke(level)
+                }
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() = Unit
+                override fun onEndOfSpeech() {
+                    mainHandler.post { onEndOfSpeech?.invoke() }
+                }
 
                 override fun onError(error: Int) {
-                    recognizerActive = false
-                    sr.destroy()
+                    destroyRecognizer()
                     mainHandler.post { onError(errorLabel(error)) }
                 }
 
                 override fun onResults(results: Bundle?) {
-                    recognizerActive = false
-                    sr.destroy()
+                    destroyRecognizer()
                     val text = results
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull()

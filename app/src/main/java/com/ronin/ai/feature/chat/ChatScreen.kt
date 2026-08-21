@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ClearAll
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -37,6 +38,7 @@ import com.ronin.ai.core.design.components.PipelineStageRow
 import com.ronin.ai.core.design.components.RoninBackground
 import com.ronin.ai.core.design.components.RoninHeader
 import com.ronin.ai.core.design.components.RoninTextField
+import com.ronin.ai.core.design.components.StreamingBubble
 import com.ronin.ai.core.design.theme.RoninCyan
 
 private val suggestions = listOf(
@@ -53,13 +55,17 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val input by viewModel.input.collectAsStateWithLifecycle()
     val isThinking by viewModel.isThinking.collectAsStateWithLifecycle()
+    val streamingText by viewModel.streamingText.collectAsStateWithLifecycle()
     val stage by viewModel.stage.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(messages.size, isThinking) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+    // Keep the newest content in view while messages arrive and while the
+    // reply streams in (the streaming bubble grows as tokens land).
+    LaunchedEffect(messages.size, isThinking, streamingText.length) {
+        val lastIndex = listState.layoutInfo.totalItemsCount - 1
+        if (lastIndex >= 0) {
+            listState.animateScrollToItem(lastIndex)
         }
     }
 
@@ -127,16 +133,21 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                         ChatBubble(message)
                     }
                     if (isThinking) {
-                        item {
-                            Row(
-                                modifier = Modifier.padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (stage != null) {
-                                    PipelineStageRow(stage?.label)
-                                } else {
-                                    LoadingDots()
+                        item(key = "thinking") {
+                            if (streamingText.isNotBlank()) {
+                                // Live reply: render tokens as they arrive.
+                                StreamingBubble(text = streamingText)
+                            } else {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    if (stage != null) {
+                                        PipelineStageRow(stage?.label)
+                                    } else {
+                                        LoadingDots()
+                                    }
                                 }
                             }
                         }
@@ -159,11 +170,13 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     placeholder = "Message RONIN…",
                     singleLine = false
                 )
+                // While generating, the action turns into "stop" so a long or
+                // stuck reply can always be interrupted.
                 GradientButton(
                     text = "",
-                    onClick = viewModel::send,
-                    icon = Icons.Rounded.Send,
-                    enabled = input.isNotBlank() && !isThinking,
+                    onClick = { if (isThinking) viewModel.stopGenerating() else viewModel.send() },
+                    icon = if (isThinking) Icons.Rounded.Stop else Icons.Rounded.Send,
+                    enabled = isThinking || input.isNotBlank(),
                     modifier = Modifier.size(54.dp)
                 )
             }

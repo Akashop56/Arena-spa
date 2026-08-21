@@ -37,6 +37,17 @@ class SecureVault {
     }
 
     fun encrypt(plain: String): String {
+        return try {
+            doEncrypt(plain)
+        } catch (t: Throwable) {
+            // The Keystore entry can be invalidated by the system (e.g. secure
+            // lock-screen changes). Regenerate once rather than failing the save.
+            runCatching { keyStore.deleteEntry(KEY_ALIAS) }
+            doEncrypt(plain)
+        }
+    }
+
+    private fun doEncrypt(plain: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, masterKey())
         val ciphertext = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))

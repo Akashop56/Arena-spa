@@ -71,8 +71,26 @@ data class AiProviderConfig(
 
     fun withDefaults(): AiProviderConfig = copy(
         model = model.ifBlank { type.defaultModel },
-        baseUrl = baseUrl.ifBlank { type.defaultBaseUrl }
+        baseUrl = baseUrl.trim().trimEnd('/').ifBlank { type.defaultBaseUrl }
     )
+
+    /**
+     * Validates the config before it can be saved or used. API keys must never
+     * travel over plaintext HTTP, so a non-https custom endpoint is rejected.
+     */
+    fun validate(): String? {
+        val url = effectiveBaseUrl
+        if (type == AiProviderType.CUSTOM) {
+            if (url.isBlank()) return "Enter the endpoint base URL (e.g. https://host/v1)"
+            if (!url.startsWith("https://", ignoreCase = true)) {
+                return "Endpoint must use https:// — plaintext HTTP would expose your API key"
+            }
+            if (model.isBlank()) return "Enter the model name for this endpoint"
+        } else if (url.isNotBlank() && !url.startsWith("https://", ignoreCase = true)) {
+            return "Endpoint must use https://"
+        }
+        return null
+    }
 }
 
 /** One chat message sent to / received from a model. */

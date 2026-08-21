@@ -12,12 +12,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.NetworkCheck
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +32,7 @@ import com.ronin.ai.core.design.components.OptionChip
 import com.ronin.ai.core.design.components.RoninBackground
 import com.ronin.ai.core.design.components.RoninHeader
 import com.ronin.ai.core.design.components.RoninTextField
+import com.ronin.ai.core.design.components.StatusChip
 import com.ronin.ai.core.design.components.SwitchRow
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
@@ -45,12 +46,13 @@ fun AiProviderEditScreen(
     viewModel: AiProviderEditViewModel = hiltViewModel()
 ) {
     val config by viewModel.config.collectAsStateWithLifecycle()
-    val saved by viewModel.saved.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val testing by viewModel.testing.collectAsStateWithLifecycle()
+    val testResult by viewModel.testResult.collectAsStateWithLifecycle()
 
-    LaunchedEffect(saved) {
-        if (saved) onBack()
-    }
+    // Note: navigating back is driven by the explicit Save action below, not by
+    // the `saved` flag — "Test connection" also saves, and auto-popping there
+    // would throw the user off the screen mid-test.
 
     RoninBackground {
         Column(
@@ -170,9 +172,44 @@ fun AiProviderEditScreen(
                 }
             }
 
+            // ---- Live connection test (saves first, then round-trips) ----
+            if (testResult != null) {
+                NeonCard(modifier = Modifier.fillMaxWidth(), glow = false) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        StatusChip(
+                            if (testResult?.success == true) "CONNECTED" else "FAILED",
+                            if (testResult?.success == true) RoninSuccess else RoninError
+                        )
+                        Text(
+                            testResult?.message.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RoninTextSecondary
+                        )
+                        if ((testResult?.latencyMs ?: 0L) > 0L) {
+                            Text(
+                                "${testResult?.latencyMs} ms · ${testResult?.model.orEmpty()}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = RoninTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            GradientButton(
+                text = if (testing) "Testing…" else "Test connection",
+                onClick = viewModel::testConnection,
+                icon = Icons.Rounded.NetworkCheck,
+                enabled = !testing,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             GradientButton(
                 text = "Save provider",
-                onClick = viewModel::save,
+                onClick = {
+                    viewModel.save()
+                    onBack()
+                },
                 modifier = Modifier.fillMaxWidth()
             )
 

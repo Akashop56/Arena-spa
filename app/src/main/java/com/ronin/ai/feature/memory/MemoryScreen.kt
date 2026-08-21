@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Search
@@ -40,11 +43,12 @@ import com.ronin.ai.core.design.components.RoninBackground
 import com.ronin.ai.core.design.components.RoninHeader
 import com.ronin.ai.core.design.components.RoninTextField
 import com.ronin.ai.core.design.components.StatusChip
+import com.ronin.ai.core.design.components.SwitchRow
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.domain.model.MemoryItem
 import com.ronin.ai.core.domain.model.MemoryType
 
@@ -53,6 +57,8 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
     val items by viewModel.items.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
+    val memoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<MemoryItem?>(null) }
@@ -67,8 +73,49 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel()) {
                     IconButton(onClick = { showAddDialog = true }) {
                         Icon(Icons.Rounded.Add, contentDescription = "Add memory", tint = RoninCyan)
                     }
+                    // Clear-all was previously unreachable: no control invoked it.
+                    IconButton(
+                        onClick = { showClearConfirm = true },
+                        enabled = stats.total > 0
+                    ) {
+                        Icon(
+                            Icons.Rounded.DeleteSweep,
+                            contentDescription = "Clear all memory",
+                            tint = if (stats.total > 0) RoninError else RoninTextSecondary
+                        )
+                    }
                 }
             )
+
+            // ---- Memory engine master switch + live totals ----
+            NeonCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SwitchRow(
+                        title = "Memory engine",
+                        subtitle = if (memoryEnabled) {
+                            "RONIN recalls and learns from your conversations."
+                        } else {
+                            "Paused — nothing new is stored and nothing is recalled."
+                        },
+                        checked = memoryEnabled,
+                        onCheckedChange = viewModel::setMemoryEnabled
+                    )
+                    Text(
+                        text = "${stats.total} stored · " +
+                            MemoryType.entries.joinToString(" · ") { type ->
+                                "${type.label} ${stats.byType[type] ?: 0}"
+                            },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = RoninTextSecondary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
 
             RoninTextField(
                 value = query,
@@ -181,7 +228,7 @@ private fun MemoryCard(
                 StatusChip(
                     item.type.label,
                     when (item.type) {
-                        MemoryType.PREFERENCE -> RoninViolet
+                        MemoryType.PREFERENCE -> RoninAmber
                         MemoryType.LEARNED_SOLUTION -> RoninSuccess
                         MemoryType.CONVERSATION -> RoninCyan
                         else -> RoninCyan

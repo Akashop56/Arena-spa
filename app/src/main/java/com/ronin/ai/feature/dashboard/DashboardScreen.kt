@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ronin.ai.core.design.components.EmptyState
+import com.ronin.ai.core.design.components.clickableNoRipple
 import com.ronin.ai.core.design.components.GlowOrb
 import com.ronin.ai.core.design.components.GradientButton
 import com.ronin.ai.core.design.components.NeonCard
@@ -57,7 +58,7 @@ import com.ronin.ai.core.design.navigation.RoninDestination
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninWarning
 import com.ronin.ai.core.domain.model.DashboardData
 import com.ronin.ai.core.design.components.ChatBubble
@@ -89,6 +90,7 @@ fun DashboardScreen(
         ) {
             item { DashboardHeader(data) }
             item { ProviderStatusCard(data, onOpenProviders = { onNavigate(RoninDestination.AI_PROVIDERS.route) }) }
+            item { SystemsStatusCard(data, onNavigate) }
             item { StatsGrid(data, onOpenSkills = { onNavigate(RoninDestination.SKILLS.route) }) }
             item { QuickActions(onNavigate) }
             item {
@@ -182,6 +184,81 @@ private fun ProviderStatusCard(data: DashboardData, onOpenProviders: () -> Unit)
     }
 }
 
+/**
+ * "All systems" panel: at-a-glance health of the three subsystems the user
+ * actually depends on — brain, memory and voice.
+ */
+@Composable
+private fun SystemsStatusCard(data: DashboardData, onNavigate: (String) -> Unit) {
+    val brainOnline = data.defaultProvider?.let { it.enabled && it.hasKey } == true
+    NeonCard(modifier = Modifier.fillMaxWidth(), glow = false) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                "SYSTEMS",
+                style = MaterialTheme.typography.labelLarge,
+                color = RoninCyan
+            )
+            SystemRow(
+                icon = Icons.Rounded.AutoAwesome,
+                label = "AI brain",
+                value = if (brainOnline) "Online" else "Not connected",
+                ok = brainOnline,
+                onClick = { onNavigate(RoninDestination.AI_PROVIDERS.route) }
+            )
+            SystemRow(
+                icon = Icons.Rounded.Memory,
+                label = "Memory",
+                value = if (data.memoryEnabled) "${data.memoryCount} stored" else "Paused",
+                ok = data.memoryEnabled,
+                onClick = { onNavigate(RoninDestination.MEMORY.route) }
+            )
+            SystemRow(
+                icon = Icons.Rounded.Mic,
+                label = "Voice",
+                value = if (data.voiceReady) data.voiceProvider else "Recognition unavailable",
+                ok = data.voiceReady,
+                onClick = { onNavigate(RoninDestination.VOICE.route) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SystemRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    ok: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickableNoRipple(onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (ok) RoninCyan else RoninWarning,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium,
+            color = RoninTextSecondary
+        )
+        StatusChip(if (ok) "OK" else "CHECK", if (ok) RoninSuccess else RoninWarning)
+    }
+}
+
 @Composable
 private fun StatsGrid(data: DashboardData, onOpenSkills: () -> Unit) {
     Row(
@@ -200,7 +277,7 @@ private fun StatsGrid(data: DashboardData, onOpenSkills: () -> Unit) {
             value = data.routineCount.toString(),
             label = "Routines",
             modifier = Modifier.weight(1f),
-            accent = RoninViolet
+            accent = RoninAmber
         )
     }
     Row(
@@ -212,7 +289,7 @@ private fun StatsGrid(data: DashboardData, onOpenSkills: () -> Unit) {
             value = data.skillCount.toString(),
             label = "Skills",
             modifier = Modifier.weight(1f),
-            accent = RoninViolet
+            accent = RoninAmber
         )
         StatTile(
             icon = Icons.Rounded.BatteryFull,
@@ -238,7 +315,7 @@ private fun QuickActions(onNavigate: (String) -> Unit) {
             QuickActionButton(
                 label = "Voice",
                 icon = Icons.Rounded.Mic,
-                accent = RoninViolet,
+                accent = RoninAmber,
                 modifier = Modifier.weight(1f)
             ) { onNavigate(RoninDestination.VOICE.route) }
         }
@@ -252,7 +329,7 @@ private fun QuickActions(onNavigate: (String) -> Unit) {
             QuickActionButton(
                 label = "Automation",
                 icon = Icons.Rounded.Bolt,
-                accent = RoninViolet,
+                accent = RoninAmber,
                 modifier = Modifier.weight(1f)
             ) { onNavigate(RoninDestination.AUTOMATION.route) }
         }

@@ -72,7 +72,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninWarning
 import com.ronin.ai.core.domain.model.NotificationEventItem
 
@@ -338,7 +338,7 @@ private fun NotificationRow(event: NotificationEventItem) {
                 )
                 StatusChip(
                     if (event.own) "RONIN" else "APP",
-                    if (event.own) RoninCyan else RoninViolet
+                    if (event.own) RoninCyan else RoninAmber
                 )
             }
             if (event.title.isNotBlank()) {

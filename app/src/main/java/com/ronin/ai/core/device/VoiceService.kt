@@ -59,11 +59,17 @@ class VoiceService @Inject constructor(
         }
     }
 
+    /** Stops speech playback (cloud audio and system TTS). Recognition is unaffected. */
     fun stopSpeaking() {
         runCatching { player?.stop() }
         runCatching { player?.release() }
         player = null
-        systemVoiceEngine.stop()
+        systemVoiceEngine.stopSpeaking()
+    }
+
+    /** Stops an active microphone session. */
+    fun stopListening() {
+        systemVoiceEngine.stopListening()
     }
 
     fun isSystemVoiceReady(): Boolean = systemVoiceEngine.isReady()
@@ -75,8 +81,19 @@ class VoiceService @Inject constructor(
         language: String,
         onPartial: (VoiceRecognitionResult) -> Unit,
         onResult: (VoiceRecognitionResult) -> Unit,
-        onError: (String) -> Unit
-    ): Boolean = systemVoiceEngine.listen(language, onPartial, onResult, onError)
+        onError: (String) -> Unit,
+        onRms: ((Float) -> Unit)? = null,
+        onReady: (() -> Unit)? = null,
+        onEndOfSpeech: (() -> Unit)? = null
+    ): Boolean = systemVoiceEngine.listen(
+        language = language,
+        onPartial = onPartial,
+        onResult = onResult,
+        onError = onError,
+        onRms = onRms,
+        onReady = onReady,
+        onEndOfSpeech = onEndOfSpeech
+    )
 
     /** Speaks a short sample using current settings (voice settings screen). */
     fun testVoice(onDone: (() -> Unit)? = null) {
