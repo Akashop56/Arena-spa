@@ -130,7 +130,28 @@ The authoritative compile (`./gradlew clean assembleDebug` on JDK 17 with
 full network) runs in GitHub Actions. This sandbox's token has no
 `workflows` scope, so `workflow_dispatch` is rejected; per the mechanism
 documented in §1 the build is triggered by merging the validation commit to
-`main`. Result recorded below when the run completes.
+`main`.
+
+### Result: **SUCCESS** — clean build, APK produced and uploaded
+
+| | |
+|---|---|
+| Run | [32502046147](https://github.com/Akashop56/Arena-spa/actions/runs/32502046147) |
+| Trigger | merge of PR #17 to `main` (push) |
+| Commit | `373f263` |
+| Result | **success** in 1m22s — all steps green, no fixes required |
+| Artifact | `Arena-debug-apk`, **18,623,434 bytes** |
+| Steps | Setup JDK 17 · Setup Gradle · Clean · **assembleDebug** · Find APK · Upload — all green |
+
+`assembleDebug` green means KSP executed for real: the **Hilt** component
+graph and all **Room** DAOs were generated and compiled. The only
+annotations are GitHub's Node 20 deprecation notices for its own actions
+(`checkout@v4`, `setup-java@v4`, `upload-artifact@v4`) — no Kotlin or
+Gradle warnings. The APK itself cannot be downloaded into this sandbox
+(artifact/log redirects to `productionresultssa*.blob.core.windows.net`,
+blocked by egress policy, same as §2); existence and size are verified via
+the artifacts API, and the upload step fails the run if no APK is found
+(`if-no-files-found: error`), so a success conclusion proves the APK.
 
 ### Android 13 (API 33) compatibility — verified statically
 
