@@ -39,7 +39,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSurface
 import com.ronin.ai.core.design.theme.RoninSurfaceHigh
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 
 /** Gradient action button (cyan → violet). */
 @Composable
@@ -57,7 +57,7 @@ fun GradientButton(
                 Brush.horizontalGradient(
                     listOf(
                         RoninCyan.copy(alpha = if (enabled) 1f else 0.35f),
-                        RoninViolet.copy(alpha = if (enabled) 1f else 0.35f)
+                        RoninAmber.copy(alpha = if (enabled) 1f else 0.35f)
                     )
                 ),
                 shape

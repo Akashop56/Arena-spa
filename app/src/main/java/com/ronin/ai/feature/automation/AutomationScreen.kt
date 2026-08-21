@@ -44,7 +44,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninWarning
 import com.ronin.ai.core.domain.model.Routine
 import com.ronin.ai.core.domain.model.RoutineAction
@@ -185,7 +185,7 @@ private fun RoutineCard(
                 Text(
                     "Trigger: “${routine.triggerPhrase}”",
                     style = MaterialTheme.typography.labelMedium,
-                    color = RoninViolet
+                    color = RoninAmber
                 )
             }
             Text(

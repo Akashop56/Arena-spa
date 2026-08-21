@@ -10,8 +10,10 @@ import com.ronin.ai.core.domain.model.ProviderMessage
 import com.ronin.ai.core.domain.model.ProviderResponse
 import com.ronin.ai.core.domain.model.ProviderTestResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import kotlin.system.measureTimeMillis
 
 /**
  * OpenAI-compatible chat completions client. Used for OpenAI, Groq and any
@@ -43,14 +45,78 @@ class OpenAiCompatibleProvider(
             maxTokens = Constants.MAX_OUTPUT_TOKENS
         )
         try {
-            val response = api.chatCompletions(url, "Bearer ${config.apiKey}", body)
-            parseResponse(response, config.effectiveModel)
+            withRetry {
+                val response = api.chatCompletions(url, "Bearer ${config.apiKey}", body)
+                parseResponse(response, config.effectiveModel)
+            }
         } catch (t: AiRequestException) {
             throw t
         } catch (t: Throwable) {
             throw t.toUserMessage("The AI provider could not be reached")
         }
     }
+
+    /**
+     * Streams an OpenAI-compatible SSE response. Each `data:` line carries a
+     * delta; `[DONE]` terminates the stream. If the endpoint rejects streaming
+     * we transparently fall back to a single buffered completion.
+     */
+    override fun stream(
+        config: AiProviderConfig,
+        messages: List<ProviderMessage>,
+        temperature: Float
+    ): Flow<String> = flow {
+        val base = config.effectiveBaseUrl
+        if (base.isBlank()) throw AiRequestException("Base URL is required for this provider")
+        if (config.apiKey.isBlank()) {
+            throw AiRequestException("No API key configured — add one in Settings → AI Providers")
+        }
+        val url = base.trimEnd('/') + "/chat/completions"
+        val body = openAiRequestBody(
+            model = config.effectiveModel,
+            messages = messages,
+            temperature = temperature,
+            maxTokens = Constants.MAX_OUTPUT_TOKENS
+        ).apply { addProperty("stream", true) }
+
+        val responseBody = try {
+            api.chatCompletionsStream(url, "Bearer ${config.apiKey}", body)
+        } catch (t: Throwable) {
+            // Endpoint does not support streaming (or transient failure):
+            // fall back to the buffered call so the user still gets a reply.
+            emit(complete(config, messages, temperature).text)
+            return@flow
+        }
+
+        var emittedAnything = false
+        responseBody.use { rb ->
+            val source = rb.source()
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (!line.startsWith("data:")) continue
+                val payload = line.removePrefix("data:").trim()
+                if (payload.isEmpty()) continue
+                if (payload == "[DONE]") break
+                val delta = runCatching {
+                    gson.fromJson(payload, JsonObject::class.java)
+                        ?.getAsJsonArray("choices")
+                        ?.takeIf { it.size() > 0 }
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("delta")
+                        ?.get("content")
+                        ?.takeIf { !it.isJsonNull }
+                        ?.asString
+                }.getOrNull()
+                if (!delta.isNullOrEmpty()) {
+                    emittedAnything = true
+                    emit(delta)
+                }
+            }
+        }
+        if (!emittedAnything) {
+            emit(complete(config, messages, temperature).text)
+        }
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun testConnection(config: AiProviderConfig): ProviderTestResult =
         withContext(Dispatchers.IO) {

@@ -3,6 +3,8 @@ package com.ronin.ai.core.design.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -35,7 +39,19 @@ import com.ronin.ai.core.design.theme.RoninBorder
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSurfaceHigh
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
+
+/**
+ * Click handler without the Material ripple. Used for small inline affordances
+ * (copy chips, stage pills) where a full ripple looks heavy.
+ */
+fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed {
+    clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick
+    )
+}
 
 /** App-wide background: dark base + subtle nebula artwork + neon glow. */
 @Composable

@@ -37,7 +37,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.domain.model.ExperienceCategory
 import com.ronin.ai.core.domain.model.ExperienceItem
 import com.ronin.ai.core.domain.model.ToolDefinition
@@ -123,7 +123,7 @@ private fun SkillCard(skill: ToolDefinition) {
                     color = RoninTextSecondary
                 )
             }
-            StatusChip(skill.category.label, RoninViolet)
+            StatusChip(skill.category.label, RoninAmber)
         }
     }
 }

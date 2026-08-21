@@ -55,7 +55,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 
 @Composable
 fun VoiceScreen(viewModel: VoiceViewModel = hiltViewModel()) {
@@ -117,20 +117,20 @@ fun VoiceScreen(viewModel: VoiceViewModel = hiltViewModel()) {
                     .clip(CircleShape)
                     .background(
                         if (isListening) RoninCyan.copy(alpha = 0.16f)
-                        else RoninViolet.copy(alpha = 0.10f)
+                        else RoninAmber.copy(alpha = 0.10f)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     WaveformBars(
                         active = isListening,
-                        color = if (isListening) RoninCyan else RoninViolet
+                        color = if (isListening) RoninCyan else RoninAmber
                     )
                     Spacer(Modifier.height(10.dp))
                     Icon(
                         if (isListening) Icons.Rounded.GraphicEq else Icons.Rounded.Mic,
                         contentDescription = null,
-                        tint = if (isListening) RoninCyan else RoninViolet,
+                        tint = if (isListening) RoninCyan else RoninAmber,
                         modifier = Modifier.size(36.dp)
                     )
                 }

@@ -14,6 +14,7 @@ import com.ronin.ai.core.domain.repository.ConversationRepository
 import com.ronin.ai.core.domain.repository.ExperienceRepository
 import com.ronin.ai.core.domain.repository.MemoryRepository
 import com.ronin.ai.core.domain.repository.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,7 +47,17 @@ class AiEngine @Inject constructor(
     private val _stage = MutableStateFlow<PipelineStage?>(null)
     val stage: StateFlow<PipelineStage?> = _stage.asStateFlow()
 
-    suspend fun process(userInput: String): ChatReply {
+    /**
+     * Runs the full pipeline.
+     *
+     * @param onToken invoked with each streamed chunk of the model reply. When
+     * null (or when the provider cannot stream) the reply is produced in one
+     * piece. Streaming never changes the persisted result.
+     */
+    suspend fun process(
+        userInput: String,
+        onToken: ((String) -> Unit)? = null
+    ): ChatReply {
         val stages = mutableListOf<PipelineStage>()
         fun mark(s: PipelineStage) {
             _stage.value = s
@@ -54,24 +65,26 @@ class AiEngine @Inject constructor(
         }
 
         try {
-            // ---- 1. Understanding ----
+            // ---- 1. Understanding + intent ----
             mark(PipelineStage.UNDERSTANDING)
             val match = intentClassifier.classify(userInput)
             mark(PipelineStage.INTENT)
 
-            // ---- 2. Planning + tool selection + execution ----
+            // ---- 2. Planning → tool selection → execution ----
+            mark(PipelineStage.PLANNING)
             var toolResult: ToolResult? = null
             var toolName: String? = null
             if (match.type != IntentType.GENERAL) {
-                mark(PipelineStage.PLANNING)
                 mark(PipelineStage.TOOL_SELECTION)
                 val tool = toolRegistry.findFor(match)
                 if (tool != null) {
                     mark(PipelineStage.EXECUTION)
                     toolName = tool.definition.name
-                    toolResult = runCatching {
+                    toolResult = try {
                         tool.execute(match.type, match.param, userInput)
-                    }.getOrElse { e ->
+                    } catch (c: CancellationException) {
+                        throw c
+                    } catch (e: Throwable) {
                         ToolResult(false, e.message ?: "Tool failed", match.type)
                     }
                     if (toolResult.success) {
@@ -90,8 +103,7 @@ class AiEngine @Inject constructor(
                 }
             }
 
-            // ---- 3. Execution via the configured AI provider ----
-            mark(PipelineStage.PLANNING)
+            // ---- 3. Generation via the configured AI provider ----
             val defaultType = settingsRepository.defaultAiProvider.first()
             val config = settingsRepository.getProviderConfig(defaultType)
             val providerReady = config.enabled && config.hasKey
@@ -106,6 +118,7 @@ class AiEngine @Inject constructor(
                     else -> "I'm ready, but no AI provider is connected yet. " +
                         "Open Settings → AI Providers, add an API key (Gemini, Groq or OpenAI), and we can talk."
                 }
+                onToken?.invoke(reply)
             } else {
                 mark(PipelineStage.EXECUTION)
                 val provider = providerFactory.forType(defaultType)
@@ -122,9 +135,24 @@ class AiEngine @Inject constructor(
                     history
                 }
                 try {
-                    val response = provider.complete(config, messages, config.temperature)
-                    reply = response.text.ifBlank { "I received an empty response from the provider." }
+                    reply = if (onToken != null) {
+                        val builder = StringBuilder()
+                        provider.stream(config, messages, config.temperature)
+                            .collect { chunk ->
+                                builder.append(chunk)
+                                onToken(chunk)
+                            }
+                        builder.toString().trim()
+                    } else {
+                        provider.complete(config, messages, config.temperature).text
+                    }
+                    if (reply.isBlank()) {
+                        reply = "I received an empty response from the provider."
+                        onToken?.invoke(reply)
+                    }
                     providerUsed = defaultType.displayName
+                } catch (c: CancellationException) {
+                    throw c
                 } catch (t: Throwable) {
                     val message = (t as? AiRequestException)?.userMessage
                         ?: t.toUserMessage("The AI provider failed").userMessage
@@ -138,18 +166,14 @@ class AiEngine @Inject constructor(
                     } else {
                         "⚠️ $message\n\nYou can fix this in Settings → AI Providers and try again."
                     }
+                    onToken?.invoke(reply)
                 }
             }
 
             // ---- 4. Evaluation + memory update ----
             mark(PipelineStage.EVALUATION)
             mark(PipelineStage.MEMORY_UPDATE)
-
-            preferenceExtractor.extract(userInput).forEach { pref ->
-                val exists = memoryRepository.byType(pref.type).first()
-                    .any { it.title == pref.title && it.content == pref.content }
-                if (!exists) memoryRepository.save(pref)
-            }
+            persistPreferences(userInput)
 
             conversationRepository.addMessage(ChatRole.ASSISTANT, reply, toolUsed = toolName)
 
@@ -159,6 +183,8 @@ class AiEngine @Inject constructor(
                 provider = providerUsed,
                 stages = stages
             )
+        } catch (c: CancellationException) {
+            throw c
         } catch (t: Throwable) {
             runCatching {
                 experienceRepository.recordError(
@@ -173,6 +199,21 @@ class AiEngine @Inject constructor(
             )
         } finally {
             _stage.value = null
+        }
+    }
+
+    /**
+     * Stores newly detected preferences. Duplicates are filtered with a
+     * targeted query instead of loading every memory of that type, which keeps
+     * the turn cheap as the memory store grows.
+     */
+    private suspend fun persistPreferences(userInput: String) {
+        val extracted = preferenceExtractor.extract(userInput)
+        if (extracted.isEmpty()) return
+        for (pref in extracted) {
+            val duplicate = memoryRepository
+                .findSimilar(pref.type, pref.title, pref.content)
+            if (!duplicate) memoryRepository.save(pref)
         }
     }
 }

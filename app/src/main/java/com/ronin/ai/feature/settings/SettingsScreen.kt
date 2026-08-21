@@ -41,7 +41,7 @@ import com.ronin.ai.core.design.components.SwitchRow
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 
 @Composable
 fun SettingsScreen(

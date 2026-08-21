@@ -21,10 +21,17 @@ class SendMessageUseCase @Inject constructor(
 
     val stage: StateFlow<PipelineStage?> = engine.stage
 
-    suspend fun invoke(input: String): ChatReply {
+    /**
+     * @param onToken receives streamed chunks of the reply as they arrive.
+     * Pass null for a buffered (non-streaming) result.
+     */
+    suspend fun invoke(
+        input: String,
+        onToken: ((String) -> Unit)? = null
+    ): ChatReply {
         val text = input.trim()
         if (text.isEmpty()) return ChatReply(reply = "")
         conversationRepository.addMessage(ChatRole.USER, text)
-        return engine.process(text)
+        return engine.process(text, onToken)
     }
 }

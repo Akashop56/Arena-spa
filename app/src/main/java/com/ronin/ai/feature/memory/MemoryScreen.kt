@@ -44,7 +44,7 @@ import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.domain.model.MemoryItem
 import com.ronin.ai.core.domain.model.MemoryType
 
@@ -181,7 +181,7 @@ private fun MemoryCard(
                 StatusChip(
                     item.type.label,
                     when (item.type) {
-                        MemoryType.PREFERENCE -> RoninViolet
+                        MemoryType.PREFERENCE -> RoninAmber
                         MemoryType.LEARNED_SOLUTION -> RoninSuccess
                         MemoryType.CONVERSATION -> RoninCyan
                         else -> RoninCyan

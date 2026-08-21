@@ -11,9 +11,11 @@ import com.ronin.ai.core.domain.model.ProviderMessage
 import com.ronin.ai.core.domain.model.ProviderResponse
 import com.ronin.ai.core.domain.model.ProviderTestResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
-import kotlin.system.measureTimeMillis
 
 /**
  * Google Gemini client (v1beta generateContent REST API).
@@ -28,18 +30,15 @@ class GeminiProvider(
 
     override val type: AiProviderType = AiProviderType.GEMINI
 
-    override suspend fun complete(
-        config: AiProviderConfig,
+    /**
+     * Converts the neutral message list into Gemini's `contents` format.
+     * System turns become `systemInstruction`; consecutive same-role turns are
+     * merged because the API rejects duplicated roles.
+     */
+    private fun buildBody(
         messages: List<ProviderMessage>,
         temperature: Float
-    ): ProviderResponse = withContext(Dispatchers.IO) {
-        if (config.apiKey.isBlank()) {
-            throw AiRequestException("No API key configured — add one in Settings → AI Providers")
-        }
-        val model = config.effectiveModel
-        val key = URLEncoder.encode(config.apiKey, "UTF-8")
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key"
-
+    ): JsonObject {
         var systemInstruction: JsonObject? = null
         val contents = JsonArray()
         var lastRole: String? = null
@@ -78,7 +77,7 @@ class GeminiProvider(
         }
         flush()
 
-        val body = JsonObject().apply {
+        return JsonObject().apply {
             add("contents", contents)
             systemInstruction?.let { add("systemInstruction", it) }
             add("generationConfig", JsonObject().apply {
@@ -87,16 +86,90 @@ class GeminiProvider(
                 addProperty("candidateCount", 1)
             })
         }
+    }
+
+    private fun endpoint(model: String, apiKey: String, method: String): String {
+        val key = URLEncoder.encode(apiKey, "UTF-8")
+        return "https://generativelanguage.googleapis.com/v1beta/models/$model:$method?key=$key"
+    }
+
+    override suspend fun complete(
+        config: AiProviderConfig,
+        messages: List<ProviderMessage>,
+        temperature: Float
+    ): ProviderResponse = withContext(Dispatchers.IO) {
+        if (config.apiKey.isBlank()) {
+            throw AiRequestException("No API key configured — add one in Settings → AI Providers")
+        }
+        val model = config.effectiveModel
+        val url = endpoint(model, config.apiKey, "generateContent")
+        val body = buildBody(messages, temperature)
 
         try {
-            val response = api.generateContent(url, body)
-            parseResponse(response, model)
+            withRetry {
+                val response = api.generateContent(url, body)
+                parseResponse(response, model)
+            }
         } catch (t: AiRequestException) {
             throw t
         } catch (t: Throwable) {
             throw t.toUserMessage("Gemini could not be reached")
         }
     }
+
+    /**
+     * Gemini streams newline-delimited SSE chunks from `streamGenerateContent`.
+     * Falls back to the buffered call when streaming is unavailable.
+     */
+    override fun stream(
+        config: AiProviderConfig,
+        messages: List<ProviderMessage>,
+        temperature: Float
+    ): Flow<String> = flow {
+        if (config.apiKey.isBlank()) {
+            throw AiRequestException("No API key configured — add one in Settings → AI Providers")
+        }
+        val model = config.effectiveModel
+        val url = endpoint(model, config.apiKey, "streamGenerateContent") + "&alt=sse"
+        val body = buildBody(messages, temperature)
+
+        val responseBody = try {
+            api.streamGenerateContent(url, body)
+        } catch (t: Throwable) {
+            emit(complete(config, messages, temperature).text)
+            return@flow
+        }
+
+        var emittedAnything = false
+        responseBody.use { rb ->
+            val source = rb.source()
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (!line.startsWith("data:")) continue
+                val payload = line.removePrefix("data:").trim()
+                if (payload.isEmpty() || payload == "[DONE]") continue
+                val text = runCatching {
+                    gson.fromJson(payload, JsonObject::class.java)
+                        ?.getAsJsonArray("candidates")
+                        ?.takeIf { it.size() > 0 }
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("content")
+                        ?.getAsJsonArray("parts")
+                        ?.joinToString("") { part ->
+                            runCatching { part.asJsonObject.get("text")?.asString }
+                                .getOrNull().orEmpty()
+                        }
+                }.getOrNull()
+                if (!text.isNullOrEmpty()) {
+                    emittedAnything = true
+                    emit(text)
+                }
+            }
+        }
+        if (!emittedAnything) {
+            emit(complete(config, messages, temperature).text)
+        }
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun testConnection(config: AiProviderConfig): ProviderTestResult =
         withContext(Dispatchers.IO) {

@@ -57,7 +57,7 @@ import com.ronin.ai.core.design.navigation.RoninDestination
 import com.ronin.ai.core.design.theme.RoninCyan
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninWarning
 import com.ronin.ai.core.domain.model.DashboardData
 import com.ronin.ai.core.design.components.ChatBubble
@@ -200,7 +200,7 @@ private fun StatsGrid(data: DashboardData, onOpenSkills: () -> Unit) {
             value = data.routineCount.toString(),
             label = "Routines",
             modifier = Modifier.weight(1f),
-            accent = RoninViolet
+            accent = RoninAmber
         )
     }
     Row(
@@ -212,7 +212,7 @@ private fun StatsGrid(data: DashboardData, onOpenSkills: () -> Unit) {
             value = data.skillCount.toString(),
             label = "Skills",
             modifier = Modifier.weight(1f),
-            accent = RoninViolet
+            accent = RoninAmber
         )
         StatTile(
             icon = Icons.Rounded.BatteryFull,
@@ -238,7 +238,7 @@ private fun QuickActions(onNavigate: (String) -> Unit) {
             QuickActionButton(
                 label = "Voice",
                 icon = Icons.Rounded.Mic,
-                accent = RoninViolet,
+                accent = RoninAmber,
                 modifier = Modifier.weight(1f)
             ) { onNavigate(RoninDestination.VOICE.route) }
         }
@@ -252,7 +252,7 @@ private fun QuickActions(onNavigate: (String) -> Unit) {
             QuickActionButton(
                 label = "Automation",
                 icon = Icons.Rounded.Bolt,
-                accent = RoninViolet,
+                accent = RoninAmber,
                 modifier = Modifier.weight(1f)
             ) { onNavigate(RoninDestination.AUTOMATION.route) }
         }

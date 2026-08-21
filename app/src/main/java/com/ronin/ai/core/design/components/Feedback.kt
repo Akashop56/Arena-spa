@@ -33,7 +33,7 @@ import com.ronin.ai.core.design.theme.RoninError
 import com.ronin.ai.core.design.theme.RoninSurfaceHigh
 import com.ronin.ai.core.design.theme.RoninSuccess
 import com.ronin.ai.core.design.theme.RoninTextSecondary
-import com.ronin.ai.core.design.theme.RoninViolet
+import com.ronin.ai.core.design.theme.RoninAmber
 import com.ronin.ai.core.design.theme.RoninWarning
 
 /** Small status pill with a dot. */
@@ -144,7 +144,7 @@ fun WaveformBars(
                     .width(6.dp)
                     .height(h.dp)
                     .background(
-                        if (index % 2 == 0) color else RoninViolet,
+                        if (index % 2 == 0) color else RoninAmber,
                         RoundedCornerShape(3.dp)
                     )
             )

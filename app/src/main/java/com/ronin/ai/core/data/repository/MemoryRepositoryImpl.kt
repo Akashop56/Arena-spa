@@ -49,6 +49,9 @@ class MemoryRepositoryImpl @Inject constructor(
 
     override suspend fun countByType(type: MemoryType): Int = dao.countByType(type.name)
 
+    override suspend fun findSimilar(type: MemoryType, title: String, content: String): Boolean =
+        dao.countMatching(type.name, title, content) > 0
+
     override suspend fun recallRelevant(input: String, limit: Int): List<MemoryItem> {
         val terms = input.keywords().take(3)
         val results = LinkedHashMap<Long, MemoryItem>()
