@@ -40,6 +40,9 @@ class AiProvidersViewModel @Inject constructor(
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
     init {
         refresh()
     }
@@ -64,29 +67,43 @@ class AiProvidersViewModel @Inject constructor(
 
     fun setEnabled(type: AiProviderType, enabled: Boolean) {
         viewModelScope.launch {
-            val config = providerUseCases.getConfig(type)
-            providerUseCases.saveConfig(config.copy(enabled = enabled))
+            runCatching {
+                val config = providerUseCases.getConfig(type)
+                providerUseCases.saveConfig(config.copy(enabled = enabled))
+            }.onFailure { e -> _error.value = e.message ?: "Couldn't update provider" }
             refresh()
         }
     }
 
     fun testConnection(type: AiProviderType) {
+        if (_busy.value) return
         viewModelScope.launch {
             _testingType.value = type
             _testResult.value = null
+            _error.value = null
             _busy.value = true
-            val result = providerUseCases.testConnection(type)
-            _testResult.value = type to result
-            _testingType.value = null
-            _busy.value = false
+            try {
+                _testResult.value = type to providerUseCases.testConnection(type)
+            } catch (t: Throwable) {
+                // Without this the spinner stuck on forever when the call threw.
+                _error.value = t.message ?: "Connection test failed"
+            } finally {
+                _testingType.value = null
+                _busy.value = false
+            }
             refresh()
         }
     }
 
     fun deleteKey(type: AiProviderType) {
         viewModelScope.launch {
-            providerUseCases.deleteKey(type)
+            runCatching { providerUseCases.deleteKey(type) }
+                .onFailure { e -> _error.value = e.message ?: "Couldn't delete key" }
             refresh()
         }
+    }
+
+    fun dismissError() {
+        _error.value = null
     }
 }
