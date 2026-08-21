@@ -109,3 +109,39 @@ python3 tools/hiltcheck.py  # 48/48 injected constructors satisfiable
    pixels — no screenshot testing.
 3. **R8/minified release build** not exercised; CI builds `assembleDebug`.
 4. Room is still schema **v1**; the next schema change needs a real `Migration`.
+
+## 6. Production validation pass — 2026-08-21
+
+**Scope: production validation only.** No features added, no architecture
+changed, nothing removed. Validated state: `main` @ `432e92e` (PR #16 merge).
+
+### Pre-merge gates (executed on the exact commit under test)
+
+```bash
+python3 tools/xref.py       # 116 files, 948 symbols,  0 broken imports
+python3 tools/vmcheck.py    # 11 screens / 11 VMs,     0 bad references
+python3 tools/sqlcheck.py   # 6 tables, 38/38 queries  pass on real SQLite
+python3 tools/hiltcheck.py  # 50/50 injected constructors satisfiable
+```
+
+### CI build
+
+The authoritative compile (`./gradlew clean assembleDebug` on JDK 17 with
+full network) runs in GitHub Actions. This sandbox's token has no
+`workflows` scope, so `workflow_dispatch` is rejected; per the mechanism
+documented in §1 the build is triggered by merging the validation commit to
+`main`. Result recorded below when the run completes.
+
+### Android 13 (API 33) compatibility — verified statically
+
+`minSdk 26 · targetSdk 35 · compileSdk 35` — API 33 sits inside the
+supported range.
+
+| Check | Status |
+|---|---|
+| `android:exported` on every component with an intent-filter (install blocker since API 31) | MainActivity `true`, NotificationListenerService `false` — both present |
+| `POST_NOTIFICATIONS` (runtime permission from API 33) | declared, requested at runtime, guarded by `SDK_INT < 33` |
+| `PendingIntent` mutability flag (mandatory API 31+) | `FLAG_IMMUTABLE` set |
+| `registerReceiver` export flag (API 33+) | only a null-receiver sticky `ACTION_BATTERY_CHANGED` query, which is exempt — guarded anyway |
+| Foreground services | none declared — no API 34 service-type requirement |
+| Cleartext traffic | `usesCleartextTraffic=false` + OkHttp interceptor |
