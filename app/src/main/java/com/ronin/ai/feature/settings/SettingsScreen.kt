@@ -153,8 +153,7 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.Security,
                     title = "API key storage",
-                    subtitle = "Encrypted with Android Keystore (AES-256-GCM)",
-                    onClick = { }
+                    subtitle = "Encrypted with Android Keystore (AES-256-GCM)"
                 )
             }
             item {

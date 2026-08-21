@@ -202,7 +202,8 @@ fun SettingsRow(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
-    onClick: () -> Unit,
+    /** Null renders an informational (non-tappable) row. */
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable RowScope.() -> Unit)? = null
 ) {
@@ -212,7 +213,7 @@ fun SettingsRow(
             .clip(RoundedCornerShape(16.dp))
             .background(RoninSurfaceHigh.copy(alpha = 0.7f))
             .border(1.dp, RoninBorder, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
