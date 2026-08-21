@@ -2,6 +2,7 @@ package com.ronin.ai.core.domain.usecase
 
 import com.ronin.ai.core.ai.tools.ToolRegistry
 import com.ronin.ai.core.device.DeviceManager
+import com.ronin.ai.core.device.VoiceService
 import com.ronin.ai.core.domain.model.DashboardData
 import com.ronin.ai.core.domain.repository.ConversationRepository
 import com.ronin.ai.core.domain.repository.ExperienceRepository
@@ -34,6 +35,7 @@ class DashboardUseCase @Inject constructor(
     private val experienceRepository: ExperienceRepository,
     private val conversationRepository: ConversationRepository,
     private val deviceManager: DeviceManager,
+    private val voiceService: VoiceService,
     private val toolRegistry: ToolRegistry
 ) {
 
@@ -46,7 +48,11 @@ class DashboardUseCase @Inject constructor(
     ) { name, defaultType, memories, routines, messages ->
         DashboardSnapshot(name, defaultType, memories.size, routines.size, messages)
     }.flatMapLatest { snapshot ->
-        experienceRepository.all().map { experiences ->
+        combine(
+            experienceRepository.all(),
+            settingsRepository.memoryEnabled,
+            settingsRepository.voiceSettings
+        ) { experiences, memoryEnabled, voice ->
             val config = runCatching {
                 settingsRepository.getProviderConfig(snapshot.defaultType)
             }.getOrNull()
@@ -58,7 +64,11 @@ class DashboardUseCase @Inject constructor(
                 skillCount = toolRegistry.definitions().size,
                 experienceCount = experiences.size,
                 battery = runCatching { deviceManager.getBatteryState() }.getOrNull(),
-                recentMessages = snapshot.messages.takeLast(3)
+                recentMessages = snapshot.messages.takeLast(3),
+                memoryEnabled = memoryEnabled,
+                voiceProvider = voice.provider.displayName,
+                voiceReady = runCatching { voiceService.isRecognitionAvailable() }
+                    .getOrDefault(false)
             )
         }
     }
