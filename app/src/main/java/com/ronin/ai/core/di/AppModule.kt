@@ -40,7 +40,10 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): RoninDatabase =
         Room.databaseBuilder(context, RoninDatabase::class.java, "ronin.db")
-            .fallbackToDestructiveMigration()
+            // Destructive fallback only applies to downgrades. A forward
+            // migration must be written for each schema bump — silently
+            // wiping the user's memories on upgrade is never acceptable.
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 
     @Provides

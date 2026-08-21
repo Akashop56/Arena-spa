@@ -8,14 +8,24 @@ import com.ronin.ai.core.domain.repository.ExperienceRepository
 import com.ronin.ai.core.domain.repository.MemoryRepository
 import com.ronin.ai.core.domain.repository.RoutineRepository
 import com.ronin.ai.core.domain.repository.SettingsRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Aggregates everything the dashboard shows in one snapshot. */
+/**
+ * Aggregates everything the dashboard shows.
+ *
+ * This is now a cold, reactive stream: memory counts, routines and the recent
+ * conversation update themselves as the underlying tables change. Previously
+ * the screen took a one-shot snapshot on init, so the numbers went stale as
+ * soon as the user chatted or saved a memory.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class DashboardUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -27,25 +37,40 @@ class DashboardUseCase @Inject constructor(
     private val toolRegistry: ToolRegistry
 ) {
 
-    private val _data = MutableStateFlow(DashboardData(assistantName = "RONIN"))
-    val data: StateFlow<DashboardData> = _data.asStateFlow()
-
-    suspend fun refresh() {
-        val name = settingsRepository.assistantName.first()
-        val defaultType = settingsRepository.defaultAiProvider.first()
-        val config = runCatching {
-            settingsRepository.getProviderConfig(defaultType)
-        }.getOrNull()
-
-        _data.value = DashboardData(
-            assistantName = name,
-            defaultProvider = config,
-            memoryCount = memoryRepository.count(),
-            routineCount = routineRepository.count(),
-            skillCount = toolRegistry.definitions().size,
-            experienceCount = experienceRepository.count(),
-            battery = runCatching { deviceManager.getBatteryState() }.getOrNull(),
-            recentMessages = runCatching { conversationRepository.getRecent(3) }.getOrDefault(emptyList())
-        )
+    fun observe(): Flow<DashboardData> = combine(
+        settingsRepository.assistantName,
+        settingsRepository.defaultAiProvider,
+        memoryRepository.all(),
+        routineRepository.routines(),
+        conversationRepository.messages()
+    ) { name, defaultType, memories, routines, messages ->
+        DashboardSnapshot(name, defaultType, memories.size, routines.size, messages)
+    }.flatMapLatest { snapshot ->
+        experienceRepository.all().map { experiences ->
+            val config = runCatching {
+                settingsRepository.getProviderConfig(snapshot.defaultType)
+            }.getOrNull()
+            DashboardData(
+                assistantName = snapshot.name,
+                defaultProvider = config,
+                memoryCount = snapshot.memoryCount,
+                routineCount = snapshot.routineCount,
+                skillCount = toolRegistry.definitions().size,
+                experienceCount = experiences.size,
+                battery = runCatching { deviceManager.getBatteryState() }.getOrNull(),
+                recentMessages = snapshot.messages.takeLast(3)
+            )
+        }
     }
+
+    private data class DashboardSnapshot(
+        val name: String,
+        val defaultType: com.ronin.ai.core.domain.model.AiProviderType,
+        val memoryCount: Int,
+        val routineCount: Int,
+        val messages: List<com.ronin.ai.core.domain.model.ChatMessage>
+    )
+
+    /** One-shot snapshot, used for pull-to-refresh style actions. */
+    suspend fun snapshot(): DashboardData = observe().first()
 }
