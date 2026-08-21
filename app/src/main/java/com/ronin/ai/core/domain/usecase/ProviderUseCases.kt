@@ -23,8 +23,11 @@ class ProviderUseCases @Inject constructor(
     suspend fun getConfig(type: AiProviderType): AiProviderConfig =
         settingsRepository.getProviderConfig(type)
 
+    /** @throws IllegalArgumentException when the endpoint/model is invalid. */
     suspend fun saveConfig(config: AiProviderConfig) {
-        settingsRepository.saveProviderConfig(config.withDefaults())
+        val normalized = config.withDefaults()
+        normalized.validate()?.let { throw IllegalArgumentException(it) }
+        settingsRepository.saveProviderConfig(normalized)
     }
 
     suspend fun deleteKey(type: AiProviderType) {

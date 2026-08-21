@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ronin.ai.core.domain.model.AiProviderConfig
 import com.ronin.ai.core.domain.model.AiProviderType
+import com.ronin.ai.core.domain.model.ProviderTestResult
 import com.ronin.ai.core.domain.usecase.ProviderUseCases
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,12 @@ class AiProviderEditViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _testing = MutableStateFlow(false)
+    val testing: StateFlow<Boolean> = _testing.asStateFlow()
+
+    private val _testResult = MutableStateFlow<ProviderTestResult?>(null)
+    val testResult: StateFlow<ProviderTestResult?> = _testResult.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -61,12 +68,35 @@ class AiProviderEditViewModel @Inject constructor(
 
     fun save() {
         viewModelScope.launch {
+            _error.value = null
             runCatching {
                 providerUseCases.saveConfig(_config.value)
             }.onSuccess {
                 _saved.value = true
             }.onFailure { e ->
                 _error.value = e.message ?: "Couldn't save"
+            }
+        }
+    }
+
+    /**
+     * Saves the current values first, then performs a live round-trip so the
+     * result reflects exactly what RONIN will use at runtime.
+     */
+    fun testConnection() {
+        if (_testing.value) return
+        viewModelScope.launch {
+            _error.value = null
+            _testResult.value = null
+            _testing.value = true
+            try {
+                providerUseCases.saveConfig(_config.value)
+                _saved.value = true
+                _testResult.value = providerUseCases.testConnection(type)
+            } catch (t: Throwable) {
+                _error.value = t.message ?: "Connection test failed"
+            } finally {
+                _testing.value = false
             }
         }
     }
