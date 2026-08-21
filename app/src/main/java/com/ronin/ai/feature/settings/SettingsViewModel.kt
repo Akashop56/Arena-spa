@@ -41,6 +41,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setAssistantName(name) }
     }
 
+    val memoryEnabled: StateFlow<Boolean> = settingsRepository.memoryEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setMemoryEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setMemoryEnabled(enabled) }
+    }
+
     fun setSpeechOutput(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setSpeechOutputEnabled(enabled) }
     }

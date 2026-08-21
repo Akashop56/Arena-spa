@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ronin.ai.core.domain.model.ChatMessage
 import com.ronin.ai.core.domain.model.PipelineStage
+import com.ronin.ai.core.device.VoiceService
 import com.ronin.ai.core.domain.repository.ConversationRepository
+import com.ronin.ai.core.domain.repository.SettingsRepository
 import com.ronin.ai.core.domain.usecase.SendMessageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,7 +23,9 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val sendMessage: SendMessageUseCase,
-    private val conversationRepository: ConversationRepository
+    private val conversationRepository: ConversationRepository,
+    private val settingsRepository: SettingsRepository,
+    private val voiceService: VoiceService
 ) : ViewModel() {
 
     /**
@@ -61,8 +66,15 @@ class ChatViewModel @Inject constructor(
             _error.value = null
             _streamingText.value = ""
             try {
-                sendMessage.invoke(text) { chunk ->
+                val reply = sendMessage.invoke(text) { chunk ->
                     _streamingText.value += chunk
+                }
+                // Honour the "Speak replies aloud" setting, which until now was
+                // persisted but never actually used anywhere.
+                if (reply.reply.isNotBlank() &&
+                    settingsRepository.speechOutputEnabled.first()
+                ) {
+                    voiceService.speak(reply.reply)
                 }
             } catch (c: CancellationException) {
                 throw c
@@ -81,6 +93,7 @@ class ChatViewModel @Inject constructor(
     fun stopGenerating() {
         sendJob?.cancel()
         sendJob = null
+        voiceService.stopSpeaking()
         _streamingText.value = ""
         _isThinking.value = false
     }
@@ -91,5 +104,10 @@ class ChatViewModel @Inject constructor(
 
     fun dismissError() {
         _error.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        voiceService.stopSpeaking()
     }
 }
