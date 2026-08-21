@@ -34,15 +34,29 @@ class AndroidDeviceManager @Inject constructor(
 ) : DeviceManager {
 
     private val packageManager = context.packageManager
-    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+
+    // These services are absent on some devices/profiles (e.g. no camera, no
+    // audio on certain emulators). Casting eagerly in the constructor would
+    // crash the whole Hilt graph at app start, so resolve them lazily and
+    // tolerate null.
+    private val audioManager: AudioManager? by lazy {
+        context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    }
+    private val cameraManager: CameraManager? by lazy {
+        context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
+    }
 
     // ---------------------------------------------------------------- battery
     override fun getBatteryState(): BatteryState {
-        val intent = context.registerReceiver(
-            null,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        )
+        // Null-receiver query of a sticky broadcast: exempt from the Android 13+
+        // RECEIVER_EXPORTED requirement, but still guarded because some OEM
+        // builds throw here.
+        val intent = runCatching {
+            context.registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+        }.getOrNull()
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
         val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
@@ -83,12 +97,17 @@ class AndroidDeviceManager @Inject constructor(
 
     // ------------------------------------------------------------- device info
     override fun getDeviceInfo(): DeviceInfo {
-        val stats = StatFs(Environment.getDataDirectory().absolutePath)
-        val storageTotal = stats.blockCountLong * stats.blockSizeLong
-        val storageFree = stats.availableBlocksLong * stats.blockSizeLong
+        // StatFs and ActivityManager can both throw on restricted profiles;
+        // device info is informational, so degrade to zeros instead of crashing.
+        val stats = runCatching { StatFs(Environment.getDataDirectory().absolutePath) }.getOrNull()
+        val storageTotal = runCatching { stats!!.blockCountLong * stats.blockSizeLong }.getOrDefault(0L)
+        val storageFree = runCatching { stats!!.availableBlocksLong * stats.blockSizeLong }.getOrDefault(0L)
 
         val memInfo = ActivityManager.MemoryInfo()
-        (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memInfo)
+        runCatching {
+            (context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager)
+                ?.getMemoryInfo(memInfo)
+        }
 
         return DeviceInfo(
             brand = Build.BRAND,
@@ -147,20 +166,26 @@ class AndroidDeviceManager @Inject constructor(
     }.getOrDefault(false)
 
     // ------------------------------------------------------------------- audio
-    override fun getVolume(): Int = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+    override fun getVolume(): Int = runCatching {
+        audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+    }.getOrDefault(0)
 
     override val maxVolume: Int
-        get() = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        get() = runCatching {
+            audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15
+        }.getOrDefault(15)
 
     override fun setVolume(level: Int): Boolean = runCatching {
+        val am = audioManager ?: return false
         val clamped = level.coerceIn(0, maxVolume)
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, clamped, 0)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, clamped, 0)
         true
     }.getOrDefault(false)
 
     override fun adjustVolume(delta: Int): Boolean = runCatching {
+        val am = audioManager ?: return false
         val flags = if (delta > 0) AudioManager.FLAG_SHOW_UI else 0
-        audioManager.adjustStreamVolume(
+        am.adjustStreamVolume(
             AudioManager.STREAM_MUSIC,
             if (delta > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
             flags
@@ -172,8 +197,9 @@ class AndroidDeviceManager @Inject constructor(
     private var torchState = false
 
     private fun torchCameraId(): String? = runCatching {
-        cameraManager.cameraIdList.firstOrNull { id: String ->
-            cameraManager.getCameraCharacteristics(id)
+        val cm = cameraManager ?: return null
+        cm.cameraIdList.firstOrNull { id: String ->
+            cm.getCameraCharacteristics(id)
                 .get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
         }
     }.getOrNull()
@@ -181,14 +207,16 @@ class AndroidDeviceManager @Inject constructor(
     override fun isTorchOn(): Boolean = torchState
 
     override fun toggleTorch(on: Boolean): Boolean = runCatching {
+        val cm = cameraManager ?: return false
         val id = torchCameraId() ?: return false
-        cameraManager.setTorchMode(id, on)
+        cm.setTorchMode(id, on)
         torchState = on
         true
     }.getOrDefault(false)
 
     // -------------------------------------------------------------- brightness
-    override fun canWriteBrightness(): Boolean = Settings.System.canWrite(context)
+    override fun canWriteBrightness(): Boolean =
+        runCatching { Settings.System.canWrite(context) }.getOrDefault(false)
 
     override fun getBrightness(): Int = runCatching {
         Settings.System.getInt(

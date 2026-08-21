@@ -34,19 +34,33 @@ class NotificationCenter @Inject constructor(
     private val notificationRepository: NotificationRepository
 ) {
 
-    private val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    // Resolved lazily and defensively: this class is a @Singleton in the Hilt
+    // graph, so throwing in the constructor (hard cast, or createNotification-
+    // Channel on a locked/restricted device) would take down app startup.
+    private val notificationManager: NotificationManager? by lazy {
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    init {
-        val channel = NotificationChannel(
-            Constants.NOTIFICATION_CHANNEL_ID,
-            context.getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = context.getString(R.string.notification_channel_desc)
+    @Volatile
+    private var channelReady = false
+
+    /** Creates the notification channel on first use. Idempotent. */
+    private fun ensureChannel(): NotificationManager? {
+        val manager = notificationManager ?: return null
+        if (channelReady) return manager
+        runCatching {
+            val channel = NotificationChannel(
+                Constants.NOTIFICATION_CHANNEL_ID,
+                context.getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.notification_channel_desc)
+            }
+            manager.createNotificationChannel(channel)
+            channelReady = true
         }
-        notificationManager.createNotificationChannel(channel)
+        return manager
     }
 
     fun hasPostPermission(): Boolean =
@@ -79,6 +93,8 @@ class NotificationCenter @Inject constructor(
     }
 
     private fun postInternal(title: String, text: String, id: Int) {
+        // Channel is created on first post rather than at injection time.
+        val manager = ensureChannel() ?: return
         val contentIntent = PendingIntent.getActivity(
             context,
             0,
@@ -94,6 +110,8 @@ class NotificationCenter @Inject constructor(
             .setAutoCancel(true)
             .setContentIntent(contentIntent)
             .build()
-        notificationManager.notify(id, notification)
+        // notify() throws if POST_NOTIFICATIONS was revoked between the check
+        // and the call, so never let a reminder crash the app.
+        runCatching { manager.notify(id, notification) }
     }
 }
